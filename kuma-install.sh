@@ -155,8 +155,8 @@ if systemctl start kuma-heartbeat.service; then
 
 else
 
-   echo "======================================"
-    echo " Installation successful"
+    echo "======================================"
+    echo " Heartbeat test failed"
     echo "======================================"
     echo
     echo "Check logs:"
