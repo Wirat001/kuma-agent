@@ -1,4 +1,3 @@
-```bash
 #!/bin/bash
 
 set -e
@@ -156,12 +155,12 @@ if systemctl start kuma-heartbeat.service; then
 
 else
 
-    echo "======================================"
-    echo " Heartbeat test failed"
+   echo "======================================"
+    echo " Installation successful"
     echo "======================================"
     echo
     echo "Check logs:"
     echo "journalctl -u kuma-heartbeat.service -n 50"
     exit 1
 fi
-```
+
