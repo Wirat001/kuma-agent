@@ -5,6 +5,13 @@ set -e
 PUSH_URL="${1:-}"
 NAME="$(hostname)"
 
+# Heartbeat settings
+INTERVAL="30 seconds"
+RETRIES=3
+RETRY_DELAY=2
+CONNECT_TIMEOUT=5
+MAX_TIMEOUT=10
+
 if [ -z "$PUSH_URL" ]; then
     echo
     echo "Usage:"
@@ -39,8 +46,8 @@ echo " Uptime Kuma Agent Installer"
 echo "======================================"
 echo
 echo "Hostname : $NAME"
-echo "Push URL : $PUSH_URL"
-echo "Interval : 60 seconds"
+echo "Interval : $INTERVAL"
+echo "Retries  : $RETRIES attempts"
 echo
 
 echo "[1/5] Checking curl..."
@@ -85,10 +92,31 @@ set -a
 source /etc/kuma/heartbeat.conf
 set +a
 
-curl -fsS \
-    --max-time 15 \
-    "$PUSH_URL" \
-    >/dev/null
+RETRIES=3
+RETRY_DELAY=2
+CONNECT_TIMEOUT=5
+MAX_TIMEOUT=10
+
+for attempt in $(seq 1 "$RETRIES"); do
+
+    if curl -fsS \
+        --connect-timeout "$CONNECT_TIMEOUT" \
+        --max-time "$MAX_TIMEOUT" \
+        "$PUSH_URL" \
+        >/dev/null 2>&1; then
+
+        exit 0
+    fi
+
+    if [ "$attempt" -lt "$RETRIES" ]; then
+        sleep "$RETRY_DELAY"
+    fi
+done
+
+# Log only when all attempts fail
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Heartbeat FAILED: $NAME - $RETRIES attempts" >&2
+
+exit 1
 EOF
 
 chmod 700 /usr/local/bin/kuma-heartbeat.sh
@@ -120,7 +148,7 @@ Description=Uptime Kuma Heartbeat Timer - $NAME
 
 [Timer]
 OnBootSec=30s
-OnUnitActiveSec=60s
+OnUnitInactiveSec=30s
 Unit=kuma-heartbeat.service
 
 [Install]
@@ -128,7 +156,6 @@ WantedBy=timers.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now kuma-heartbeat.timer
 
 echo
 echo "Testing heartbeat..."
@@ -136,12 +163,15 @@ echo
 
 if systemctl start kuma-heartbeat.service; then
 
+    systemctl enable --now kuma-heartbeat.timer
+
     echo "======================================"
     echo " Installation successful"
     echo "======================================"
     echo
     echo "Hostname : $NAME"
-    echo "Interval : 60 seconds"
+    echo "Interval : $INTERVAL"
+    echo "Retries  : $RETRIES attempts"
     echo
     echo "Timer status:"
     systemctl is-active kuma-heartbeat.timer
@@ -160,7 +190,6 @@ else
     echo "======================================"
     echo
     echo "Check logs:"
-    echo "journalctl -u kuma-heartbeat.service -n 50"
+    echo "journalctl -u kuma-heartbeat.service -n 50 --no-pager"
     exit 1
 fi
-
